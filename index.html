@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0ea5e9" />
+    <meta name="theme-color" content="#1098f7" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Habit Momentum" />
@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -22,160 +22,253 @@
     <div class="bg-shape bg-shape-a"></div>
     <div class="bg-shape bg-shape-b"></div>
 
-    <main class="app-shell">
-      <header class="hero card">
-        <p class="eyebrow">PERSONAL HABIT SYSTEM</p>
-        <h1>Build habits that actually stick.</h1>
-        <p class="subhead">
-          Track multiple habits in parallel with strict daily check-ins,
-          accountability pressure, and momentum-based feedback.
-        </p>
-      </header>
+    <main class="app-layout">
+      <aside class="sidebar card">
+        <div class="brand">
+          <p class="eyebrow">HABIT MOMENTUM</p>
+          <h1>Accountability OS</h1>
+          <p class="muted">Track multiple habits with one daily board.</p>
+        </div>
 
-      <section class="setup card" id="setupCard">
-        <h2>Add a Habit Challenge</h2>
-        <form id="habitForm" class="habit-form">
-          <label>
-            Habit name
-            <input
-              id="habitName"
-              type="text"
-              placeholder="e.g. Read research papers for 30 minutes"
-              maxlength="80"
-              required
-            />
-          </label>
+        <nav class="sidebar-nav">
+          <button class="nav-link active" data-view="dashboard" type="button">Today Board</button>
+          <button class="nav-link" data-view="calendar" type="button">Calendar Board</button>
+          <button class="nav-link" data-view="detail" type="button">Habit Detail</button>
+          <button class="nav-link" data-view="add" type="button">Add Habit</button>
+        </nav>
 
-          <label>
-            Why this matters to you
-            <input
-              id="habitCommitment"
-              type="text"
-              placeholder="e.g. I want to become more disciplined and focused"
-              maxlength="120"
-              required
-            />
-          </label>
-
-          <label>
-            Challenge length
-            <select id="habitDuration" required>
-              <option value="30">30 days (starter)</option>
-              <option value="45">45 days (balanced)</option>
-              <option value="60">60 days (deep habit)</option>
-            </select>
-          </label>
-
-          <button type="submit" class="primary-btn">Add habit</button>
-        </form>
-      </section>
-
-      <section class="dashboard hidden" id="dashboard">
-        <article class="card habits-card">
-          <div class="habits-header">
-            <h3>Your Habits</h3>
-            <p id="habitCount" class="tool-status"></p>
+        <section class="sidebar-metrics">
+          <div>
+            <p class="metric-label">Habits</p>
+            <p class="metric-value" id="sidebarTotalHabits">0</p>
           </div>
-          <p id="overviewText" class="tool-status"></p>
-          <div id="habitsList" class="habits-list"></div>
-        </article>
-
-        <article class="card status-card">
-          <div class="status-header">
-            <div>
-              <p class="eyebrow">SELECTED CHALLENGE</p>
-              <h2 id="habitTitle"></h2>
-              <p id="commitmentLine" class="commitment-line"></p>
-              <p id="todayLabel" class="today-label"></p>
-            </div>
-            <button id="deleteHabitBtn" class="ghost-btn" type="button">Delete habit</button>
+          <div>
+            <p class="metric-label">Pending Today</p>
+            <p class="metric-value" id="sidebarPending">0</p>
           </div>
-
-          <div class="status-grid">
-            <div>
-              <p class="metric-label">Day</p>
-              <p class="metric-value" id="dayProgress">1/30</p>
-            </div>
-            <div>
-              <p class="metric-label">Current streak</p>
-              <p class="metric-value" id="currentStreak">0</p>
-            </div>
-            <div>
-              <p class="metric-label">Best streak</p>
-              <p class="metric-value" id="bestStreak">0</p>
-            </div>
-            <div>
-              <p class="metric-label">Consistency</p>
-              <p class="metric-value" id="consistencyScore">0%</p>
-            </div>
-            <div>
-              <p class="metric-label">Last 7 days</p>
-              <p class="metric-value" id="last7Score">0%</p>
-            </div>
-            <div>
-              <p class="metric-label">Days left</p>
-              <p class="metric-value" id="daysLeft">30</p>
-            </div>
+          <div>
+            <p class="metric-label">Done Today</p>
+            <p class="metric-value" id="sidebarDone">0</p>
           </div>
+        </section>
 
-          <div class="checkin-row" id="checkinRow">
-            <button id="doneBtn" class="success-btn">I did it today</button>
-            <button id="missBtn" class="danger-btn">I skipped today</button>
-          </div>
+        <section>
+          <p class="section-title">Habits</p>
+          <div id="sidebarHabits" class="sidebar-habits"></div>
+        </section>
+      </aside>
 
-          <p id="nextMilestone" class="next-milestone"></p>
-          <p id="accountabilityNote" class="accountability-note"></p>
-        </article>
+      <section class="main-area">
+        <section id="view-dashboard" class="view">
+          <article class="card view-hero">
+            <p class="eyebrow">TODAY</p>
+            <h2 id="todayBoardTitle">Daily Habit Command Center</h2>
+            <p id="todayBoardDate" class="muted"></p>
+            <button id="completeAllBtn" class="primary-btn" type="button">Mark all pending done</button>
+          </article>
 
-        <article class="card toolkit-card">
-          <h3>Accountability Toolkit</h3>
-
-          <div class="tool-block">
-            <p class="tool-label">Daily reminder (selected habit)</p>
-            <div class="reminder-row">
-              <input id="reminderTime" type="time" value="20:00" />
-              <button id="reminderToggleBtn" class="ghost-btn" type="button">
-                Enable reminder
-              </button>
+          <article class="card">
+            <div class="card-head">
+              <h3>Today Checklist</h3>
+              <p id="todayChecklistMeta" class="muted"></p>
             </div>
-            <p id="reminderStatus" class="tool-status"></p>
-          </div>
+            <div id="todayChecklist" class="today-checklist"></div>
+          </article>
 
-          <div class="tool-block">
-            <p class="tool-label">Daily reflection (selected habit)</p>
-            <textarea
-              id="reflectionInput"
-              maxlength="220"
-              placeholder="Write one honest line about today."
-            ></textarea>
-            <div class="reflection-row">
-              <p id="reflectionMeta" class="tool-status"></p>
-              <button id="saveReflectionBtn" class="ghost-btn" type="button">
-                Save reflection
-              </button>
+          <article class="card">
+            <h3>Daily Snapshot</h3>
+            <div class="snapshot-grid">
+              <div>
+                <p class="metric-label">Total Habits</p>
+                <p class="metric-value" id="summaryTotalHabits">0</p>
+              </div>
+              <div>
+                <p class="metric-label">Done Today</p>
+                <p class="metric-value" id="summaryDone">0</p>
+              </div>
+              <div>
+                <p class="metric-label">Pending Today</p>
+                <p class="metric-value" id="summaryPending">0</p>
+              </div>
+              <div>
+                <p class="metric-label">Today Score</p>
+                <p class="metric-value" id="summaryRate">0%</p>
+              </div>
             </div>
-          </div>
-        </article>
+            <div class="score-bar" aria-hidden="true">
+              <div id="summaryRateBar" class="score-bar-fill"></div>
+            </div>
+          </article>
+        </section>
 
-        <article class="card timeline-card">
-          <div class="timeline-header">
-            <h3>Momentum Timeline (selected habit)</h3>
-            <div class="timeline-actions">
-              <button id="exportBtn" class="ghost-btn" type="button">Export selected CSV</button>
-              <button id="resetBtn" class="ghost-btn" type="button">Reset selected habit</button>
+        <section id="view-calendar" class="view hidden">
+          <article class="card">
+            <div class="card-head week-header">
+              <h3>Weekly Habit Calendar</h3>
+              <div class="week-controls">
+                <button id="weekPrevBtn" class="ghost-btn" type="button">Prev</button>
+                <button id="weekTodayBtn" class="ghost-btn" type="button">This Week</button>
+                <button id="weekNextBtn" class="ghost-btn" type="button">Next</button>
+              </div>
             </div>
+            <p id="weekRangeTitle" class="muted"></p>
+            <div id="weekMatrix" class="week-matrix"></div>
+            <p class="legend">
+              <span class="dot done"></span> Done
+              <span class="dot missed"></span> Missed
+              <span class="dot pending"></span> Pending
+              <span class="dot outside"></span> Out of range
+            </p>
+          </article>
+        </section>
+
+        <section id="view-detail" class="view hidden">
+          <article id="detailEmpty" class="card hidden">
+            <h3>No habit selected</h3>
+            <p class="muted">Add a habit first, then select it from the sidebar.</p>
+          </article>
+
+          <div id="detailContent" class="detail-grid">
+            <article class="card status-card">
+              <div class="status-header">
+                <div>
+                  <p class="eyebrow">SELECTED HABIT</p>
+                  <h2 id="habitTitle"></h2>
+                  <p id="commitmentLine" class="commitment-line"></p>
+                  <p id="todayLabel" class="today-label"></p>
+                </div>
+                <button id="deleteHabitBtn" class="ghost-btn" type="button">Delete habit</button>
+              </div>
+
+              <div class="status-grid">
+                <div>
+                  <p class="metric-label">Day</p>
+                  <p class="metric-value" id="dayProgress">1/30</p>
+                </div>
+                <div>
+                  <p class="metric-label">Current streak</p>
+                  <p class="metric-value" id="currentStreak">0</p>
+                </div>
+                <div>
+                  <p class="metric-label">Best streak</p>
+                  <p class="metric-value" id="bestStreak">0</p>
+                </div>
+                <div>
+                  <p class="metric-label">Consistency</p>
+                  <p class="metric-value" id="consistencyScore">0%</p>
+                </div>
+                <div>
+                  <p class="metric-label">Last 7 days</p>
+                  <p class="metric-value" id="last7Score">0%</p>
+                </div>
+                <div>
+                  <p class="metric-label">Days left</p>
+                  <p class="metric-value" id="daysLeft">30</p>
+                </div>
+              </div>
+
+              <div class="checkin-row">
+                <button id="doneBtn" class="success-btn" type="button">I did it today</button>
+                <button id="missBtn" class="danger-btn" type="button">I skipped today</button>
+              </div>
+
+              <p id="nextMilestone" class="next-milestone"></p>
+              <p id="accountabilityNote" class="accountability-note"></p>
+            </article>
+
+            <article class="card toolkit-card">
+              <h3>Accountability Toolkit</h3>
+
+              <div class="tool-block">
+                <p class="tool-label">Daily reminder</p>
+                <div class="reminder-row">
+                  <input id="reminderTime" type="time" value="20:00" />
+                  <button id="reminderToggleBtn" class="ghost-btn" type="button">
+                    Enable reminder
+                  </button>
+                </div>
+                <p id="reminderStatus" class="muted"></p>
+              </div>
+
+              <div class="tool-block">
+                <p class="tool-label">Daily reflection</p>
+                <textarea
+                  id="reflectionInput"
+                  maxlength="220"
+                  placeholder="Write one honest line about today."
+                ></textarea>
+                <div class="reflection-row">
+                  <p id="reflectionMeta" class="muted"></p>
+                  <button id="saveReflectionBtn" class="ghost-btn" type="button">
+                    Save reflection
+                  </button>
+                </div>
+              </div>
+            </article>
+
+            <article class="card timeline-card">
+              <div class="card-head">
+                <h3>Habit Timeline</h3>
+                <div class="timeline-actions">
+                  <button id="exportBtn" class="ghost-btn" type="button">Export CSV</button>
+                  <button id="resetBtn" class="ghost-btn" type="button">Reset habit</button>
+                </div>
+              </div>
+              <div id="timeline" class="timeline"></div>
+              <p class="legend">
+                <span class="dot done"></span> Done
+                <span class="dot missed"></span> Missed
+                <span class="dot pending"></span> Pending
+                <span class="dot note"></span> Note
+              </p>
+            </article>
           </div>
-          <div id="timeline" class="timeline"></div>
-          <p class="legend">
-            <span class="dot done"></span> Completed
-            <span class="dot missed"></span> Missed
-            <span class="dot pending"></span> Pending
-            <span class="dot note"></span> Has note
-          </p>
-        </article>
+        </section>
+
+        <section id="view-add" class="view hidden">
+          <article class="card setup-card">
+            <p class="eyebrow">ADD HABIT</p>
+            <h2>Create a new challenge</h2>
+            <form id="habitForm" class="habit-form">
+              <label>
+                Habit name
+                <input
+                  id="habitName"
+                  type="text"
+                  placeholder="e.g. Read research papers for 30 minutes"
+                  maxlength="80"
+                  required
+                />
+              </label>
+
+              <label>
+                Why this matters to you
+                <input
+                  id="habitCommitment"
+                  type="text"
+                  placeholder="e.g. I want to become more disciplined and focused"
+                  maxlength="120"
+                  required
+                />
+              </label>
+
+              <label>
+                Challenge length
+                <select id="habitDuration" required>
+                  <option value="30">30 days (starter)</option>
+                  <option value="45">45 days (balanced)</option>
+                  <option value="60">60 days (deep habit)</option>
+                </select>
+              </label>
+
+              <button type="submit" class="primary-btn">Add habit</button>
+            </form>
+          </article>
+        </section>
       </section>
     </main>
 
+    <div id="celebrationLayer" class="celebration-layer" aria-hidden="true"></div>
     <div id="reminderToast" class="toast hidden" role="status" aria-live="polite"></div>
 
     <script src="app.js"></script>

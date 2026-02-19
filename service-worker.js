@@ -1,4 +1,4 @@
-const CACHE_NAME = "habit-momentum-cache-v1";
+const CACHE_NAME = "habit-momentum-cache-v2";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -34,34 +34,34 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const isNavigate = event.request.mode === "navigate";
-
-  if (isNavigate) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put("/index.html", copy));
-          return response;
-        })
-        .catch(() => caches.match("/index.html"))
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
-
-      return fetch(event.request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          return response;
-        })
-        .catch(() => caches.match("/index.html"));
-    })
-  );
+  event.respondWith(networkFirst(event.request));
 });
+
+async function networkFirst(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const isSameOrigin = new URL(request.url).origin === self.location.origin;
+
+  try {
+    const response = await fetch(request);
+
+    if (isSameOrigin && response && response.ok) {
+      cache.put(request, response.clone());
+      if (request.mode === "navigate") {
+        cache.put("/index.html", response.clone());
+      }
+    }
+
+    return response;
+  } catch {
+    const cached = await cache.match(request);
+    if (cached) {
+      return cached;
+    }
+
+    if (request.mode === "navigate") {
+      return cache.match("/index.html");
+    }
+
+    throw new Error("Network unavailable and no cached response found.");
+  }
+}

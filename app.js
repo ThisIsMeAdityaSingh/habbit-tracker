@@ -5,17 +5,46 @@ const STORE_NAME = "habit_store";
 const STATE_KEY = "current_state";
 const MS_IN_DAY = 86400000;
 const MILESTONES = [3, 7, 14, 21, 30, 45, 60];
+const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+const navLinks = Array.from(document.querySelectorAll(".nav-link"));
+const views = {
+  dashboard: document.getElementById("view-dashboard"),
+  calendar: document.getElementById("view-calendar"),
+  detail: document.getElementById("view-detail"),
+  add: document.getElementById("view-add"),
+};
+
+const sidebarTotalHabits = document.getElementById("sidebarTotalHabits");
+const sidebarPending = document.getElementById("sidebarPending");
+const sidebarDone = document.getElementById("sidebarDone");
+const sidebarHabits = document.getElementById("sidebarHabits");
 
 const habitForm = document.getElementById("habitForm");
 const habitNameInput = document.getElementById("habitName");
 const habitCommitmentInput = document.getElementById("habitCommitment");
 const habitDurationInput = document.getElementById("habitDuration");
-const setupCard = document.getElementById("setupCard");
-const dashboard = document.getElementById("dashboard");
 
-const habitCount = document.getElementById("habitCount");
-const overviewText = document.getElementById("overviewText");
-const habitsList = document.getElementById("habitsList");
+const todayBoardDate = document.getElementById("todayBoardDate");
+const completeAllBtn = document.getElementById("completeAllBtn");
+const todayChecklist = document.getElementById("todayChecklist");
+const todayChecklistMeta = document.getElementById("todayChecklistMeta");
+
+const summaryTotalHabits = document.getElementById("summaryTotalHabits");
+const summaryDone = document.getElementById("summaryDone");
+const summaryPending = document.getElementById("summaryPending");
+const summaryRate = document.getElementById("summaryRate");
+const summaryRateBar = document.getElementById("summaryRateBar");
+
+const weekPrevBtn = document.getElementById("weekPrevBtn");
+const weekNextBtn = document.getElementById("weekNextBtn");
+const weekTodayBtn = document.getElementById("weekTodayBtn");
+const weekRangeTitle = document.getElementById("weekRangeTitle");
+const weekMatrix = document.getElementById("weekMatrix");
+
+const detailEmpty = document.getElementById("detailEmpty");
+const detailContent = document.getElementById("detailContent");
+const statusCard = document.querySelector(".status-card");
 
 const habitTitle = document.getElementById("habitTitle");
 const commitmentLine = document.getElementById("commitmentLine");
@@ -28,7 +57,6 @@ const last7Score = document.getElementById("last7Score");
 const daysLeft = document.getElementById("daysLeft");
 const nextMilestone = document.getElementById("nextMilestone");
 const accountabilityNote = document.getElementById("accountabilityNote");
-const timeline = document.getElementById("timeline");
 
 const doneBtn = document.getElementById("doneBtn");
 const missBtn = document.getElementById("missBtn");
@@ -44,7 +72,20 @@ const reflectionInput = document.getElementById("reflectionInput");
 const reflectionMeta = document.getElementById("reflectionMeta");
 const saveReflectionBtn = document.getElementById("saveReflectionBtn");
 
+const timeline = document.getElementById("timeline");
+const celebrationLayer = document.getElementById("celebrationLayer");
 const reminderToast = document.getElementById("reminderToast");
+const completionPulseTargets = [
+  summaryDone,
+  summaryPending,
+  summaryRate,
+  sidebarDone,
+  sidebarPending,
+  sidebarTotalHabits,
+];
+const COMPLETION_HIGHLIGHT_MS = 1800;
+const COMPLETION_BURST_PARTICLES = 16;
+const COMPLETION_COLORS = ["#14b87c", "#2fc1ff", "#1f7bda", "#1ed39b", "#f3c056"];
 
 let state = {
   version: 3,
@@ -52,168 +93,223 @@ let state = {
   habits: [],
 };
 
+let currentView = "dashboard";
+let calendarWeekOffset = 0;
 let toastTimer = null;
 let dbPromise = null;
+let completionClearTimer = null;
+let completionPulseTimer = null;
+let completionState = {
+  habitId: null,
+  timestamp: 0,
+};
 const reminderTimers = new Map();
 
-habitForm.addEventListener("submit", (event) => {
-  event.preventDefault();
+initEventListeners();
 
-  const name = habitNameInput.value.trim();
-  const commitment = habitCommitmentInput.value.trim();
-  const duration = Number(habitDurationInput.value);
+function initEventListeners() {
+  navLinks.forEach((button) => {
+    button.addEventListener("click", () => {
+      setView(button.dataset.view || "dashboard");
+    });
+  });
 
-  if (!name || !commitment || !duration) {
-    return;
-  }
+  habitForm.addEventListener("submit", (event) => {
+    event.preventDefault();
 
-  const newHabit = createHabit(name, commitment, duration);
-  state.habits.unshift(newHabit);
-  state.activeHabitId = newHabit.id;
+    const name = habitNameInput.value.trim();
+    const commitment = habitCommitmentInput.value.trim();
+    const duration = Number(habitDurationInput.value);
 
-  persistState();
-  habitForm.reset();
-  habitDurationInput.value = "30";
-  render();
-});
-
-doneBtn.addEventListener("click", () => {
-  submitCheckin("done");
-});
-
-missBtn.addEventListener("click", () => {
-  const activeHabit = getActiveHabit();
-  if (!activeHabit) {
-    return;
-  }
-
-  const reason = window.prompt(
-    "What made you skip today, and what is your fix for tomorrow?",
-    ""
-  );
-
-  if (reason === null) {
-    return;
-  }
-
-  submitCheckin("missed", reason.trim());
-});
-
-saveReflectionBtn.addEventListener("click", () => {
-  const activeHabit = getActiveHabit();
-  if (!activeHabit) {
-    return;
-  }
-
-  const progress = syncCalendarProgress(activeHabit);
-  if (!progress.inChallengeWindow) {
-    return;
-  }
-
-  const day = activeHabit.days[progress.todayIndex];
-  if (!day) {
-    return;
-  }
-
-  day.note = reflectionInput.value.trim();
-  persistState();
-  reflectionMeta.textContent = `Saved for Day ${progress.todayIndex + 1}.`;
-  renderTimeline(activeHabit.days, progress.todayIndex, progress.inChallengeWindow);
-  renderHabitList();
-});
-
-reminderToggleBtn.addEventListener("click", async () => {
-  const activeHabit = getActiveHabit();
-  if (!activeHabit) {
-    return;
-  }
-
-  if (!activeHabit.reminder) {
-    activeHabit.reminder = { enabled: false, time: "20:00" };
-  }
-
-  if (!activeHabit.reminder.enabled) {
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      try {
-        await Notification.requestPermission();
-      } catch {
-        // Ignore permission errors and continue with in-app reminder.
-      }
+    if (!name || !commitment || !duration) {
+      return;
     }
-    activeHabit.reminder.enabled = true;
-  } else {
-    activeHabit.reminder.enabled = false;
-  }
 
-  persistState();
-  render();
-});
+    const habit = createHabit(name, commitment, duration);
+    state.habits.unshift(habit);
+    state.activeHabitId = habit.id;
 
-reminderTimeInput.addEventListener("change", () => {
-  const activeHabit = getActiveHabit();
-  if (!activeHabit) {
-    return;
-  }
+    persistState();
+    habitForm.reset();
+    habitDurationInput.value = "30";
 
-  if (!activeHabit.reminder) {
-    activeHabit.reminder = { enabled: false, time: "20:00" };
-  }
+    setView("dashboard");
+    render();
+  });
 
-  activeHabit.reminder.time = reminderTimeInput.value || "20:00";
-  persistState();
-  render();
-});
+  completeAllBtn.addEventListener("click", () => {
+    markAllPendingDone();
+  });
 
-exportBtn.addEventListener("click", () => {
-  const activeHabit = getActiveHabit();
-  if (!activeHabit) {
-    return;
-  }
+  weekPrevBtn.addEventListener("click", () => {
+    calendarWeekOffset -= 1;
+    renderCalendarBoard();
+  });
 
-  exportProgressCSV(activeHabit);
-});
+  weekNextBtn.addEventListener("click", () => {
+    calendarWeekOffset += 1;
+    renderCalendarBoard();
+  });
 
-resetBtn.addEventListener("click", () => {
-  const activeHabit = getActiveHabit();
-  if (!activeHabit) {
-    return;
-  }
+  weekTodayBtn.addEventListener("click", () => {
+    calendarWeekOffset = 0;
+    renderCalendarBoard();
+  });
 
-  const ok = window.confirm(`Reset progress for \"${activeHabit.name}\"?`);
-  if (!ok) {
-    return;
-  }
+  doneBtn.addEventListener("click", (event) => {
+    const habit = getActiveHabit();
+    if (!habit) {
+      return;
+    }
+    submitCheckinForHabit(habit.id, "done", "", event.currentTarget);
+  });
 
-  activeHabit.startDate = todayISO();
-  activeHabit.days = Array.from({ length: activeHabit.duration }, () => ({
-    status: "pending",
-    note: "",
-    checkedAt: null,
-  }));
+  missBtn.addEventListener("click", () => {
+    const habit = getActiveHabit();
+    if (!habit) {
+      return;
+    }
 
-  persistState();
-  render();
-});
+    const reason = window.prompt(
+      "What made you skip today, and what is your fix for tomorrow?",
+      ""
+    );
 
-deleteHabitBtn.addEventListener("click", () => {
-  const activeHabit = getActiveHabit();
-  if (!activeHabit) {
-    return;
-  }
+    if (reason === null) {
+      return;
+    }
 
-  const ok = window.confirm(`Delete habit \"${activeHabit.name}\" permanently?`);
-  if (!ok) {
-    return;
-  }
+    submitCheckinForHabit(habit.id, "missed", reason.trim());
+  });
 
-  state.habits = state.habits.filter((habit) => habit.id !== activeHabit.id);
-  if (state.activeHabitId === activeHabit.id) {
+  saveReflectionBtn.addEventListener("click", () => {
+    const habit = getActiveHabit();
+    if (!habit) {
+      return;
+    }
+
+    const progress = syncCalendarProgress(habit);
+    if (!progress.inChallengeWindow) {
+      return;
+    }
+
+    const day = habit.days[progress.todayIndex];
+    if (!day) {
+      return;
+    }
+
+    day.note = reflectionInput.value.trim();
+    persistState();
+    reflectionMeta.textContent = `Saved for Day ${progress.todayIndex + 1}.`;
+    render();
+  });
+
+  reminderToggleBtn.addEventListener("click", async () => {
+    const habit = getActiveHabit();
+    if (!habit) {
+      return;
+    }
+
+    if (!habit.reminder) {
+      habit.reminder = { enabled: false, time: "20:00" };
+    }
+
+    if (!habit.reminder.enabled) {
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        try {
+          await Notification.requestPermission();
+        } catch {
+          // Ignore permission errors.
+        }
+      }
+      habit.reminder.enabled = true;
+    } else {
+      habit.reminder.enabled = false;
+    }
+
+    persistState();
+    render();
+  });
+
+  reminderTimeInput.addEventListener("change", () => {
+    const habit = getActiveHabit();
+    if (!habit) {
+      return;
+    }
+
+    if (!habit.reminder) {
+      habit.reminder = { enabled: false, time: "20:00" };
+    }
+
+    habit.reminder.time = reminderTimeInput.value || "20:00";
+    persistState();
+    render();
+  });
+
+  exportBtn.addEventListener("click", () => {
+    const habit = getActiveHabit();
+    if (!habit) {
+      return;
+    }
+    exportProgressCSV(habit);
+  });
+
+  resetBtn.addEventListener("click", () => {
+    const habit = getActiveHabit();
+    if (!habit) {
+      return;
+    }
+
+    const ok = window.confirm(`Reset progress for \"${habit.name}\"?`);
+    if (!ok) {
+      return;
+    }
+
+    habit.startDate = todayISO();
+    habit.days = Array.from({ length: habit.duration }, () => ({
+      status: "pending",
+      note: "",
+      checkedAt: null,
+    }));
+
+    persistState();
+    render();
+  });
+
+  deleteHabitBtn.addEventListener("click", () => {
+    const habit = getActiveHabit();
+    if (!habit) {
+      return;
+    }
+
+    const ok = window.confirm(`Delete habit \"${habit.name}\" permanently?`);
+    if (!ok) {
+      return;
+    }
+
+    state.habits = state.habits.filter((item) => item.id !== habit.id);
     state.activeHabitId = state.habits[0]?.id || null;
+
+    persistState();
+    render();
+  });
+}
+
+function setView(viewName) {
+  if (!views[viewName]) {
+    return;
   }
 
-  persistState();
-  render();
-});
+  currentView = viewName;
+
+  navLinks.forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === currentView);
+  });
+
+  Object.entries(views).forEach(([viewKey, node]) => {
+    node.classList.toggle("hidden", viewKey !== currentView);
+  });
+}
 
 function createHabit(name, commitment, duration) {
   return {
@@ -244,39 +340,44 @@ function getActiveHabit() {
     return null;
   }
 
-  let activeHabit = state.habits.find((habit) => habit.id === state.activeHabitId);
-  if (!activeHabit) {
-    activeHabit = state.habits[0];
-    state.activeHabitId = activeHabit.id;
+  let habit = state.habits.find((item) => item.id === state.activeHabitId);
+  if (!habit) {
+    habit = state.habits[0];
+    state.activeHabitId = habit.id;
     persistState();
   }
 
-  return activeHabit;
+  return habit;
 }
 
-function setActiveHabit(habitId) {
-  if (state.activeHabitId === habitId) {
+function setActiveHabit(habitId, goToDetail = false) {
+  if (!state.habits.some((habit) => habit.id === habitId)) {
     return;
   }
 
   state.activeHabitId = habitId;
   persistState();
+
+  if (goToDetail) {
+    setView("detail");
+  }
+
   render();
 }
 
-function submitCheckin(status, missedReason = "") {
-  const activeHabit = getActiveHabit();
-  if (!activeHabit) {
+function submitCheckinForHabit(habitId, status, missedReason = "", triggerNode = null) {
+  const habit = state.habits.find((item) => item.id === habitId);
+  if (!habit) {
     return;
   }
 
-  const progress = syncCalendarProgress(activeHabit);
+  const progress = syncCalendarProgress(habit);
   if (!progress.canCheckinToday) {
     render();
     return;
   }
 
-  const day = activeHabit.days[progress.todayIndex];
+  const day = habit.days[progress.todayIndex];
   if (!day || day.status !== "pending") {
     return;
   }
@@ -288,139 +389,393 @@ function submitCheckin(status, missedReason = "") {
     day.note = `Missed reason: ${missedReason}`.slice(0, 220);
   }
 
+  if (status === "done") {
+    triggerCompletionFeedback(habit, triggerNode);
+  }
+
+  persistState();
+  render();
+}
+
+function markAllPendingDone() {
+  let changed = 0;
+
+  state.habits.forEach((habit) => {
+    const progress = syncCalendarProgress(habit);
+    if (!progress.canCheckinToday) {
+      return;
+    }
+
+    const day = habit.days[progress.todayIndex];
+    if (!day || day.status !== "pending") {
+      return;
+    }
+
+    day.status = "done";
+    day.checkedAt = todayISO();
+    changed += 1;
+  });
+
+  if (!changed) {
+    return;
+  }
+
+  showToast(`${changed} habit${changed === 1 ? "" : "s"} marked done for today.`);
   persistState();
   render();
 }
 
 function render() {
-  setupCard.classList.remove("hidden");
-
-  const changedAny = syncAllHabits();
-  if (changedAny) {
+  const changed = syncAllHabits();
+  if (changed) {
     persistState();
   }
 
-  if (!state.habits.length) {
-    dashboard.classList.add("hidden");
-    clearAllReminderTimers();
-    return;
-  }
-
-  dashboard.classList.remove("hidden");
-
-  const activeHabit = getActiveHabit();
-  if (!activeHabit) {
-    dashboard.classList.add("hidden");
-    clearAllReminderTimers();
-    return;
-  }
-
-  const progress = syncCalendarProgress(activeHabit);
-  const statuses = activeHabit.days.map((entry) => entry.status);
-  const metrics = calculateMetrics(statuses);
-  const finished = metrics.completed + metrics.missed >= activeHabit.duration;
-  const dayDisplay = progress.inChallengeWindow
-    ? progress.todayIndex + 1
-    : progress.todayOffset < 0
-      ? 1
-      : activeHabit.duration;
-
-  habitTitle.textContent = activeHabit.name;
-  commitmentLine.textContent = `Commitment: ${activeHabit.commitment}`;
-  todayLabel.textContent = `Today: ${formatDate(todayISO())} | Started: ${formatDate(activeHabit.startDate)}`;
-
-  dayProgress.textContent = `${dayDisplay}/${activeHabit.duration}`;
-  currentStreak.textContent = String(metrics.currentStreak);
-  bestStreak.textContent = String(metrics.bestStreak);
-  consistencyScore.textContent = `${Math.round(metrics.consistency)}%`;
-  last7Score.textContent = `${Math.round(metrics.last7Consistency)}%`;
-  daysLeft.textContent = String(Math.max(activeHabit.duration - (progress.todayOffset + 1), 0));
-
-  const canCheckinToday = progress.canCheckinToday && !finished;
-  doneBtn.disabled = !canCheckinToday;
-  missBtn.disabled = !canCheckinToday;
-
-  nextMilestone.textContent = buildMilestoneText(metrics.completed, activeHabit.duration);
-  accountabilityNote.textContent = buildAccountabilityNote(metrics, activeHabit, progress, finished);
-
-  renderHabitList();
-  renderOverview();
-  renderTimeline(activeHabit.days, progress.todayIndex, progress.inChallengeWindow);
-  renderReflection(activeHabit, progress);
-  renderReminderStatus(activeHabit, progress);
+  renderSidebar();
+  renderDashboard();
+  renderCalendarBoard();
+  renderDetailView();
   scheduleAllReminders();
 }
 
-function renderHabitList() {
-  habitsList.innerHTML = "";
+function renderSidebar() {
+  const summary = getTodaySummary();
+
+  sidebarTotalHabits.textContent = String(state.habits.length);
+  sidebarPending.textContent = String(summary.pending);
+  sidebarDone.textContent = String(summary.done);
+
+  sidebarHabits.innerHTML = "";
+
+  if (!state.habits.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No habits yet.";
+    sidebarHabits.appendChild(empty);
+    return;
+  }
+
+  state.habits.forEach((habit) => {
+    const progress = syncCalendarProgress(habit);
+    const todayStatus = getTodayStatusLabel(habit, progress);
+    const freshCompletion = isFreshCompletion(habit.id);
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `side-habit${habit.id === state.activeHabitId ? " active" : ""}${freshCompletion ? " completion-flash" : ""}`;
+
+    const name = document.createElement("p");
+    name.className = "side-habit-name";
+    name.textContent = habit.name;
+
+    const meta = document.createElement("p");
+    meta.className = "side-habit-meta";
+    meta.textContent = `Today: ${todayStatus}`;
+
+    button.appendChild(name);
+    button.appendChild(meta);
+    button.addEventListener("click", () => setActiveHabit(habit.id, true));
+
+    sidebarHabits.appendChild(button);
+  });
+}
+
+function renderDashboard() {
+  todayBoardDate.textContent = `Today: ${formatDate(todayISO())}`;
+
+  todayChecklist.innerHTML = "";
+
+  const summary = getTodaySummary();
+  summaryTotalHabits.textContent = String(summary.total);
+  summaryDone.textContent = String(summary.done);
+  summaryPending.textContent = String(summary.pending);
+
+  const actionable = summary.done + summary.pending + summary.missed;
+  const score = actionable === 0 ? 0 : Math.round((summary.done / actionable) * 100);
+  summaryRate.textContent = `${score}%`;
+  if (summaryRateBar) {
+    summaryRateBar.style.width = `${score}%`;
+  }
+
+  completeAllBtn.disabled = summary.pending === 0;
+  todayChecklistMeta.textContent = `${summary.done} done, ${summary.pending} pending, ${summary.missed} missed.`;
+
+  if (!state.habits.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "Add your first habit from the Add Habit tab.";
+    todayChecklist.appendChild(empty);
+    return;
+  }
 
   state.habits.forEach((habit) => {
     const progress = syncCalendarProgress(habit);
     const attempts = habit.days.filter((entry) => entry.status !== "pending").length;
-    const statusLabel = progress.inChallengeWindow
-      ? habit.days[progress.todayIndex]?.status || "pending"
-      : progress.todayOffset < 0
-        ? "not started"
-        : "complete";
+    const statusLabel = getTodayStatusLabel(habit, progress);
+    const freshCompletion = isFreshCompletion(habit.id);
 
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = `habit-item${habit.id === state.activeHabitId ? " active" : ""}`;
+    const row = document.createElement("div");
+    row.className = `today-row${freshCompletion ? " completion-flash" : ""}`;
 
-    const title = document.createElement("p");
-    title.className = "habit-item-title";
+    const main = document.createElement("div");
+    main.className = "today-row-main";
+
+    const title = document.createElement("h4");
     title.textContent = habit.name;
 
     const meta = document.createElement("p");
-    meta.className = "habit-item-meta";
-    meta.textContent = `Progress ${attempts}/${habit.duration} | Today: ${statusLabel}`;
+    meta.textContent = `Progress ${attempts}/${habit.duration} | ${statusLabel}`;
 
-    item.appendChild(title);
-    item.appendChild(meta);
-    item.addEventListener("click", () => setActiveHabit(habit.id));
+    main.appendChild(title);
+    main.appendChild(meta);
 
-    habitsList.appendChild(item);
+    const actions = document.createElement("div");
+    actions.className = "today-actions";
+
+    if (progress.canCheckinToday) {
+      const doneButton = document.createElement("button");
+      doneButton.className = "mini-btn";
+      doneButton.textContent = "Done";
+      doneButton.addEventListener("click", (event) =>
+        submitCheckinForHabit(habit.id, "done", "", event.currentTarget)
+      );
+
+      const missButton = document.createElement("button");
+      missButton.className = "mini-btn";
+      missButton.textContent = "Missed";
+      missButton.addEventListener("click", () => {
+        const reason = window.prompt(
+          "What made you skip today, and what is your fix for tomorrow?",
+          ""
+        );
+
+        if (reason === null) {
+          return;
+        }
+
+        submitCheckinForHabit(habit.id, "missed", reason.trim());
+      });
+
+      actions.appendChild(doneButton);
+      actions.appendChild(missButton);
+    } else {
+      const chip = document.createElement("span");
+      chip.className = `status-chip ${toStatusClass(statusLabel)}`;
+      chip.textContent = statusLabel;
+      actions.appendChild(chip);
+    }
+
+    const detailButton = document.createElement("button");
+    detailButton.className = "mini-btn";
+    detailButton.textContent = "Open";
+    detailButton.addEventListener("click", () => setActiveHabit(habit.id, true));
+    actions.appendChild(detailButton);
+
+    row.appendChild(main);
+    row.appendChild(actions);
+    todayChecklist.appendChild(row);
   });
 }
 
-function renderOverview() {
-  const total = state.habits.length;
-  const todayPending = state.habits.filter((habit) => {
-    const progress = syncCalendarProgress(habit);
-    return progress.canCheckinToday;
-  }).length;
+function renderCalendarBoard() {
+  weekMatrix.innerHTML = "";
 
-  const todayDone = state.habits.filter((habit) => {
-    const progress = syncCalendarProgress(habit);
-    if (!progress.inChallengeWindow) {
-      return false;
-    }
-    return habit.days[progress.todayIndex]?.status === "done";
-  }).length;
+  const weekDates = getWeekDates(calendarWeekOffset);
+  const weekStart = weekDates[0];
+  const weekEnd = weekDates[6];
 
-  habitCount.textContent = `${total} habit${total === 1 ? "" : "s"}`;
-  overviewText.textContent = `Today: ${todayDone} done, ${todayPending} pending check-ins.`;
+  weekRangeTitle.textContent = `${formatDate(weekStart)} - ${formatDate(weekEnd)}`;
+
+  if (!state.habits.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No habits yet. Add one to see the calendar board.";
+    weekMatrix.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("div");
+  table.className = "week-table";
+
+  const corner = document.createElement("div");
+  corner.className = "week-cell header";
+  corner.textContent = "Habit";
+  table.appendChild(corner);
+
+  weekDates.forEach((dateISO, idx) => {
+    const head = document.createElement("div");
+    head.className = "week-cell header";
+    head.textContent = `${WEEKDAY_NAMES[idx]} ${shortDateNumber(dateISO)}`;
+    table.appendChild(head);
+  });
+
+  state.habits.forEach((habit) => {
+    const attempts = habit.days.filter((entry) => entry.status !== "pending").length;
+
+    const habitCell = document.createElement("div");
+    habitCell.className = "week-cell habit-name";
+
+    const title = document.createElement("p");
+    title.className = "week-habit-title";
+    title.textContent = habit.name;
+
+    const meta = document.createElement("p");
+    meta.className = "week-habit-meta";
+    meta.textContent = `${attempts}/${habit.duration} days`;
+
+    habitCell.appendChild(title);
+    habitCell.appendChild(meta);
+    table.appendChild(habitCell);
+
+    weekDates.forEach((dateISO) => {
+      const day = getHabitDayOnDate(habit, dateISO);
+      const cell = document.createElement("div");
+      cell.className = "week-cell";
+
+      const label = document.createElement("p");
+      label.className = `week-status ${day.className}`;
+      label.textContent = day.label;
+      cell.appendChild(label);
+
+      if (day.canActToday) {
+        const actions = document.createElement("div");
+        actions.className = "week-inline-actions";
+
+        const doneButton = document.createElement("button");
+        doneButton.className = "done";
+        doneButton.textContent = "Done";
+        doneButton.addEventListener("click", (event) =>
+          submitCheckinForHabit(habit.id, "done", "", event.currentTarget)
+        );
+
+        const missButton = document.createElement("button");
+        missButton.className = "miss";
+        missButton.textContent = "Miss";
+        missButton.addEventListener("click", () => {
+          const reason = window.prompt(
+            "What made you skip today, and what is your fix for tomorrow?",
+            ""
+          );
+
+          if (reason === null) {
+            return;
+          }
+
+          submitCheckinForHabit(habit.id, "missed", reason.trim());
+        });
+
+        actions.appendChild(doneButton);
+        actions.appendChild(missButton);
+        cell.appendChild(actions);
+      }
+
+      table.appendChild(cell);
+    });
+  });
+
+  weekMatrix.appendChild(table);
 }
 
-function renderTimeline(days, todayIndex, inChallengeWindow) {
+function getHabitDayOnDate(habit, dateISO) {
+  const offset = daysBetweenISO(habit.startDate, dateISO);
+  const today = todayISO();
+
+  if (offset < 0 || offset >= habit.duration) {
+    return {
+      label: "Out",
+      className: "outside",
+      canActToday: false,
+    };
+  }
+
+  const status = habit.days[offset]?.status || "pending";
+  const map = {
+    done: "Done",
+    missed: "Missed",
+    pending: "Pending",
+  };
+
+  const canActToday = dateISO === today && status === "pending";
+
+  return {
+    label: map[status] || "Pending",
+    className: status,
+    canActToday,
+  };
+}
+
+function renderDetailView() {
+  const habit = getActiveHabit();
+  if (!habit) {
+    detailEmpty.classList.remove("hidden");
+    detailContent.classList.add("hidden");
+    if (statusCard) {
+      statusCard.classList.remove("completion-flash");
+    }
+    return;
+  }
+
+  detailEmpty.classList.add("hidden");
+  detailContent.classList.remove("hidden");
+
+  const progress = syncCalendarProgress(habit);
+  const statuses = habit.days.map((entry) => entry.status);
+  const metrics = calculateMetrics(statuses);
+  const finished = metrics.completed + metrics.missed >= habit.duration;
+  const dayDisplay = progress.inChallengeWindow
+    ? progress.todayIndex + 1
+    : progress.todayOffset < 0
+      ? 1
+      : habit.duration;
+
+  habitTitle.textContent = habit.name;
+  commitmentLine.textContent = `Commitment: ${habit.commitment}`;
+  todayLabel.textContent = `Today: ${formatDate(todayISO())} | Started: ${formatDate(habit.startDate)}`;
+
+  dayProgress.textContent = `${dayDisplay}/${habit.duration}`;
+  currentStreak.textContent = String(metrics.currentStreak);
+  bestStreak.textContent = String(metrics.bestStreak);
+  consistencyScore.textContent = `${Math.round(metrics.consistency)}%`;
+  last7Score.textContent = `${Math.round(metrics.last7Consistency)}%`;
+  daysLeft.textContent = String(Math.max(habit.duration - (progress.todayOffset + 1), 0));
+
+  const canCheckin = progress.canCheckinToday && !finished;
+  doneBtn.disabled = !canCheckin;
+  missBtn.disabled = !canCheckin;
+  if (statusCard) {
+    statusCard.classList.toggle("completion-flash", isFreshCompletion(habit.id));
+  }
+
+  nextMilestone.textContent = buildMilestoneText(metrics.completed, habit.duration);
+  accountabilityNote.textContent = buildAccountabilityNote(metrics, habit, progress, finished);
+
+  renderReflection(habit, progress);
+  renderReminderStatus(habit, progress);
+  renderTimeline(habit.days, progress.todayIndex, progress.inChallengeWindow, habit.id);
+}
+
+function renderTimeline(days, todayIndex, inChallengeWindow, habitId) {
   timeline.innerHTML = "";
 
-  days.forEach((entry, index) => {
-    const dayNode = document.createElement("div");
-    dayNode.className = `day-pill ${entry.status}`;
+  days.forEach((entry, idx) => {
+    const node = document.createElement("div");
+    node.className = `day-pill ${entry.status}`;
+    node.style.setProperty("--i", String(idx));
 
-    if (inChallengeWindow && index === todayIndex && entry.status === "pending") {
-      dayNode.classList.add("current");
+    if (inChallengeWindow && idx === todayIndex && entry.status === "pending") {
+      node.classList.add("current");
+    }
+    if (inChallengeWindow && idx === todayIndex && entry.status === "done" && isFreshCompletion(habitId)) {
+      node.classList.add("just-done");
     }
 
     if (entry.note) {
-      dayNode.classList.add("has-note");
+      node.classList.add("has-note");
     }
 
-    const noteSnippet = entry.note ? ` | Note: ${entry.note.slice(0, 60)}` : "";
-    dayNode.title = `Day ${index + 1}: ${entry.status}${noteSnippet}`;
-    dayNode.textContent = String(index + 1);
-    timeline.appendChild(dayNode);
+    node.title = `Day ${idx + 1}: ${entry.status}`;
+    node.textContent = String(idx + 1);
+    timeline.appendChild(node);
   });
 }
 
@@ -466,12 +821,152 @@ function renderReminderStatus(habit, progress) {
   reminderStatus.textContent = `Reminder active at ${habit.reminder.time} (${mode}).`;
 }
 
-function scheduleAllReminders() {
-  clearAllReminderTimers();
+function triggerCompletionFeedback(habit, triggerNode) {
+  completionState = {
+    habitId: habit.id,
+    timestamp: Date.now(),
+  };
+
+  if (completionClearTimer) {
+    window.clearTimeout(completionClearTimer);
+  }
+  completionClearTimer = window.setTimeout(() => {
+    completionState = { habitId: null, timestamp: 0 };
+    render();
+  }, COMPLETION_HIGHLIGHT_MS);
+
+  const statuses = habit.days.map((entry) => entry.status);
+  const metrics = calculateMetrics(statuses);
+  const streak = metrics.currentStreak;
+  showToast(
+    `${habit.name} completed for today. ${streak > 0 ? `Streak: ${streak} day${streak === 1 ? "" : "s"}.` : ""}`
+  );
+
+  pulseSummaryMetrics();
+  burstCelebration(triggerNode);
+  tapPulse(triggerNode);
+
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    try {
+      navigator.vibrate([12, 34, 18]);
+    } catch {
+      // Ignore haptic failures.
+    }
+  }
+}
+
+function isFreshCompletion(habitId) {
+  if (!habitId || completionState.habitId !== habitId) {
+    return false;
+  }
+  return Date.now() - completionState.timestamp <= COMPLETION_HIGHLIGHT_MS;
+}
+
+function pulseSummaryMetrics() {
+  completionPulseTargets.forEach((node) => {
+    if (node) {
+      node.classList.remove("metric-pulse");
+      node.classList.add("metric-pulse");
+    }
+  });
+
+  if (completionPulseTimer) {
+    window.clearTimeout(completionPulseTimer);
+  }
+  completionPulseTimer = window.setTimeout(() => {
+    completionPulseTargets.forEach((node) => node?.classList.remove("metric-pulse"));
+  }, 760);
+}
+
+function tapPulse(node) {
+  if (!(node instanceof HTMLElement)) {
+    return;
+  }
+  node.classList.remove("tap-pulse");
+  node.classList.add("tap-pulse");
+  window.setTimeout(() => node.classList.remove("tap-pulse"), 420);
+}
+
+function burstCelebration(triggerNode) {
+  if (!(triggerNode instanceof HTMLElement) || !celebrationLayer) {
+    return;
+  }
+
+  const rect = triggerNode.getBoundingClientRect();
+  const originX = rect.left + rect.width / 2;
+  const originY = rect.top + rect.height / 2;
+
+  for (let i = 0; i < COMPLETION_BURST_PARTICLES; i += 1) {
+    const particle = document.createElement("span");
+    const angle = (Math.PI * 2 * i) / COMPLETION_BURST_PARTICLES + Math.random() * 0.45;
+    const distance = 30 + Math.random() * 58;
+    const driftX = Math.cos(angle) * distance;
+    const driftY = Math.sin(angle) * distance - (16 + Math.random() * 10);
+
+    particle.className = "celebration-particle";
+    particle.style.left = `${originX}px`;
+    particle.style.top = `${originY}px`;
+    particle.style.setProperty("--dx", `${driftX}px`);
+    particle.style.setProperty("--dy", `${driftY}px`);
+    particle.style.background = COMPLETION_COLORS[i % COMPLETION_COLORS.length];
+
+    celebrationLayer.appendChild(particle);
+    window.setTimeout(() => particle.remove(), 800);
+  }
+}
+
+function getTodaySummary() {
+  const summary = {
+    total: state.habits.length,
+    done: 0,
+    pending: 0,
+    missed: 0,
+  };
 
   state.habits.forEach((habit) => {
-    scheduleReminderForHabit(habit);
+    const progress = syncCalendarProgress(habit);
+    if (!progress.inChallengeWindow) {
+      return;
+    }
+
+    const status = habit.days[progress.todayIndex]?.status;
+    if (status === "done") {
+      summary.done += 1;
+    } else if (status === "pending") {
+      summary.pending += 1;
+    } else if (status === "missed") {
+      summary.missed += 1;
+    }
   });
+
+  return summary;
+}
+
+function getTodayStatusLabel(habit, progress) {
+  if (!progress.inChallengeWindow) {
+    return progress.todayOffset < 0 ? "not started" : "out of range";
+  }
+
+  const status = habit.days[progress.todayIndex]?.status || "pending";
+  return status;
+}
+
+function toStatusClass(statusLabel) {
+  if (statusLabel === "done") {
+    return "done";
+  }
+  if (statusLabel === "missed") {
+    return "missed";
+  }
+  if (statusLabel === "pending") {
+    return "pending";
+  }
+  return "outside";
+}
+
+function scheduleAllReminders() {
+  clearAllReminderTimers();
+  state.habits.forEach((habit) => scheduleReminderForHabit(habit));
 }
 
 function scheduleReminderForHabit(habit) {
@@ -540,7 +1035,7 @@ function fireReminder(habitId) {
           body: message,
         });
       } catch {
-        // Some environments block notifications silently.
+        // Ignore blocked notification errors.
       }
     }
   }
@@ -560,7 +1055,7 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => {
     reminderToast.classList.remove("show");
     reminderToast.classList.add("hidden");
-  }, 4500);
+  }, 4300);
 }
 
 function calculateMetrics(statuses) {
@@ -727,6 +1222,35 @@ function exportProgressCSV(habit) {
   URL.revokeObjectURL(url);
 }
 
+function getWeekDates(weekOffset) {
+  const base = startOfWeek(todayISO());
+  const shifted = addDaysISO(base, weekOffset * 7);
+  const dates = [];
+
+  for (let i = 0; i < 7; i += 1) {
+    dates.push(addDaysISO(shifted, i));
+  }
+
+  return dates;
+}
+
+function startOfWeek(dateISO) {
+  const [year, month, day] = dateISO.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const current = date.getDay();
+  const mondayOffset = (current + 6) % 7;
+  date.setDate(date.getDate() - mondayOffset);
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
+}
+
+function shortDateNumber(dateISO) {
+  const [, , day] = dateISO.split("-").map(Number);
+  return String(day);
+}
+
 function getNextReminderDate(timeValue) {
   const [rawHour, rawMinute] = (timeValue || "20:00").split(":");
   const hour = Number(rawHour);
@@ -810,7 +1334,7 @@ async function saveState(newState) {
     await idbSet(STATE_KEY, newState);
     clearLegacyState();
   } catch {
-    // Silent fail: UI still works in-memory for this session.
+    // Ignore persistence errors for this session.
   }
 }
 
@@ -821,7 +1345,7 @@ async function loadState() {
       return normalizeState(stored);
     }
   } catch {
-    // Try legacy fallback below.
+    // Fallback below.
   }
 
   const legacyState = readLegacyState();
@@ -1022,6 +1546,7 @@ async function idbDelete(key) {
 
 async function init() {
   state = await loadState();
+  setView(currentView);
   render();
   registerServiceWorker();
 }
@@ -1035,7 +1560,7 @@ function registerServiceWorker() {
 
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/service-worker.js").catch(() => {
-      // App works without offline caching if registration fails.
+      // App works without offline cache if registration fails.
     });
   });
 }
