@@ -186,6 +186,60 @@ button:disabled {
   gap: 18px;
 }
 
+.habits-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.habits-header h3,
+.toolkit-card h3 {
+  margin: 0;
+}
+
+.habits-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.habit-item {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  background: #fff;
+  color: var(--ink-0);
+  padding: 12px;
+  text-align: left;
+}
+
+.habit-item.active {
+  border-color: color-mix(in oklab, var(--brand-0), white 30%);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--brand-0), white 72%);
+}
+
+.habit-item-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.habit-item-meta {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  font-size: 0.8rem;
+}
+
+.status-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
 .status-header h2 {
   margin: 8px 0 6px;
 }
@@ -234,10 +288,6 @@ button:disabled {
   color: var(--ink-1);
   line-height: 1.5;
   min-height: 24px;
-}
-
-.toolkit-card h3 {
-  margin: 0;
 }
 
 .tool-block {
@@ -411,7 +461,8 @@ button:disabled {
 
   .checkin-row button,
   .reminder-row button,
-  .reflection-row button {
+  .reflection-row button,
+  .status-header .ghost-btn {
     flex: 1;
   }
 

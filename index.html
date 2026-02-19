@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0ea5e9" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Habit Momentum" />
     <title>Habit Momentum</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -21,13 +27,13 @@
         <p class="eyebrow">PERSONAL HABIT SYSTEM</p>
         <h1>Build habits that actually stick.</h1>
         <p class="subhead">
-          A focused 30 to 60 day tracker with strict daily check-ins,
+          Track multiple habits in parallel with strict daily check-ins,
           accountability pressure, and momentum-based feedback.
         </p>
       </header>
 
       <section class="setup card" id="setupCard">
-        <h2>Create Your Habit Challenge</h2>
+        <h2>Add a Habit Challenge</h2>
         <form id="habitForm" class="habit-form">
           <label>
             Habit name
@@ -60,17 +66,29 @@
             </select>
           </label>
 
-          <button type="submit" class="primary-btn">Start challenge</button>
+          <button type="submit" class="primary-btn">Add habit</button>
         </form>
       </section>
 
       <section class="dashboard hidden" id="dashboard">
+        <article class="card habits-card">
+          <div class="habits-header">
+            <h3>Your Habits</h3>
+            <p id="habitCount" class="tool-status"></p>
+          </div>
+          <p id="overviewText" class="tool-status"></p>
+          <div id="habitsList" class="habits-list"></div>
+        </article>
+
         <article class="card status-card">
           <div class="status-header">
-            <p class="eyebrow">ACTIVE CHALLENGE</p>
-            <h2 id="habitTitle"></h2>
-            <p id="commitmentLine" class="commitment-line"></p>
-            <p id="todayLabel" class="today-label"></p>
+            <div>
+              <p class="eyebrow">SELECTED CHALLENGE</p>
+              <h2 id="habitTitle"></h2>
+              <p id="commitmentLine" class="commitment-line"></p>
+              <p id="todayLabel" class="today-label"></p>
+            </div>
+            <button id="deleteHabitBtn" class="ghost-btn" type="button">Delete habit</button>
           </div>
 
           <div class="status-grid">
@@ -113,7 +131,7 @@
           <h3>Accountability Toolkit</h3>
 
           <div class="tool-block">
-            <p class="tool-label">Daily reminder</p>
+            <p class="tool-label">Daily reminder (selected habit)</p>
             <div class="reminder-row">
               <input id="reminderTime" type="time" value="20:00" />
               <button id="reminderToggleBtn" class="ghost-btn" type="button">
@@ -124,7 +142,7 @@
           </div>
 
           <div class="tool-block">
-            <p class="tool-label">Daily reflection</p>
+            <p class="tool-label">Daily reflection (selected habit)</p>
             <textarea
               id="reflectionInput"
               maxlength="220"
@@ -141,10 +159,10 @@
 
         <article class="card timeline-card">
           <div class="timeline-header">
-            <h3>Momentum Timeline</h3>
+            <h3>Momentum Timeline (selected habit)</h3>
             <div class="timeline-actions">
-              <button id="exportBtn" class="ghost-btn" type="button">Export CSV</button>
-              <button id="resetBtn" class="ghost-btn" type="button">Reset challenge</button>
+              <button id="exportBtn" class="ghost-btn" type="button">Export selected CSV</button>
+              <button id="resetBtn" class="ghost-btn" type="button">Reset selected habit</button>
             </div>
           </div>
           <div id="timeline" class="timeline"></div>
